@@ -17,5 +17,9 @@ module ObjectSpaceHelper
         sum + ::ObjectSpace.memsize_of(object.instance_variable_get(var))
       end
     end
+
+    def open_file_descriptors
+      ObjectSpace.each_object(::IO).to_a.sort_by(&:object_id).reject(&:closed?)
+    end
   end
 end

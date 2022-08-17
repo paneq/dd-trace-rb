@@ -38,6 +38,7 @@ RSpec.describe 'Tracer integration tests' do
     end
   end
 
+  before { WebMock.disable! }
   after { tracer.shutdown! }
 
   describe 'agent receives span' do
@@ -136,24 +137,32 @@ RSpec.describe 'Tracer integration tests' do
   describe 'agent receives short span' do
     include_context 'agent-based test'
 
-    before do
+    def trace
       tracer.trace('my.short.op') do |span|
         @span = span
         span.service = 'my.service'
       end
 
-      @first_shutdown = tracer.shutdown!
+      force_synchronous_flush(tracer.writer.worker)
     end
 
     let(:stats) { tracer.writer.stats }
 
     it do
-      expect(@first_shutdown).to be true
+      trace
+
       expect(@span.finished?).to be true
       expect(stats[:services_flushed]).to be_nil
     end
 
-    it_behaves_like 'flushed trace'
+    it 'reuses the same HTTP connection' do
+      expect { trace }.to change { ObjectSpaceHelper.open_file_descriptors.size }.by(1)
+      expect { trace }.to_not(change { ObjectSpaceHelper.open_file_descriptors })
+    end
+
+    it_behaves_like 'flushed trace' do
+      before { trace }
+    end
   end
 
   describe 'rule sampler' do
